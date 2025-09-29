@@ -2,10 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Smart Gateway</title>
-  <link rel="stylesheet" href="assets/css/styles.css" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+  </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex items-center justify-center px-6">
   <main class="w-full max-w-lg">
@@ -23,7 +27,353 @@
     </div>
   </main>
 
-  <script src="assets/js/domains.js"></script>
-  <script src="assets/js/gateway.js"></script>
+  <script>
+    (() => {
+      const iconWrapper = document.getElementById('iconWrapper');
+      const titleEl = document.getElementById('title');
+      const messageEl = document.getElementById('message');
+      const detailsEl = document.getElementById('details');
+
+      const baseIconClasses = 'mx-auto flex h-20 w-20 items-center justify-center rounded-full';
+      const iconMeta = {
+        spinner: {
+          wrapper: 'bg-sky-500/10 text-sky-400',
+          markup:
+            '<span class="block h-12 w-12 animate-spin rounded-full border-[3px] border-current border-t-transparent"></span>'
+        },
+        browser: {
+          wrapper: 'bg-emerald-500/10 text-emerald-400',
+          markup:
+            '<svg class="h-12 w-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2H4V7z" stroke-linecap="round" stroke-linejoin="round"></path><path d="M4 9h16v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9z" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="7.5" cy="7" r="0.75" fill="currentColor"></circle><circle cx="10.5" cy="7" r="0.75" fill="currentColor"></circle><circle cx="13.5" cy="7" r="0.75" fill="currentColor"></circle></svg>'
+        },
+        error: {
+          wrapper: 'bg-rose-500/10 text-rose-400',
+          markup:
+            '<svg class="h-12 w-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 8v4m0 4h.01" stroke-linecap="round" stroke-linejoin="round"></path><path d="M10.29 3.86 2.82 17a1 1 0 0 0 .86 1.5h16.64a1 1 0 0 0 .86-1.5L13.71 3.86a1 1 0 0 0-1.72 0z" stroke-linecap="round" stroke-linejoin="round"></path></svg>'
+        }
+      };
+
+      const setView = ({ icon = 'spinner', title, message, details }) => {
+        const meta = iconMeta[icon] || iconMeta.spinner;
+        iconWrapper.className = baseIconClasses + ' ' + meta.wrapper;
+        iconWrapper.innerHTML = meta.markup;
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        if (details) {
+          detailsEl.innerHTML = details;
+          detailsEl.classList.remove('hidden');
+        } else {
+          detailsEl.innerHTML = '';
+          detailsEl.classList.add('hidden');
+        }
+      };
+
+      const progressHint = '<p class="text-xs uppercase tracking-widest text-slate-500/80">Please keep this tab open while we optimize your connection.</p>';
+
+      const isInAppBrowser = () => {
+        const ua = (navigator.userAgent || navigator.vendor || '').toLowerCase();
+        const blockedIdentifiers = [
+          'micromessenger',
+          'alipayclient',
+          'alipay',
+          'wxwork',
+          'wecom'
+        ];
+        return blockedIdentifiers.some((token) => ua.includes(token));
+      };
+
+      const domainConfig = {
+        /**
+         * Update this list with every domain or subdomain that hosts the primary service.
+         * Domains are checked in order and the first reachable entry wins.
+         */
+        domainsToCheck: [
+          'https://www.google.com',
+          'https://www.apple.com',
+          'example.com'
+        ],
+        /**
+         * Global fallback resource that should exist on every domain above.
+         * Use '/' to probe the homepage, or point to a lightweight status file.
+         */
+        healthCheckPath: '/',
+        /**
+         * Optional per-domain overrides for probes that live at a different path.
+         * Example: { 'https://cdn.service-b.net': '/status/ping' }
+         */
+        healthCheckOverrides: {},
+        /**
+         * Adjust this value to balance accuracy vs. responsiveness (milliseconds).
+         */
+        timeoutMs: 4000,
+        /**
+         * Treat HTTP 4xx responses as a successful probe so a missing health file
+         * or 403 "forbidden" page still counts as a reachable domain.
+         */
+        treatClientErrorsAsSuccess: true,
+        /**
+         * Append a cache-busting query string to probes so CDNs do not cache 404s.
+         * Set to null to disable cache busting.
+         */
+        cacheBustParam: '_gateway_ping',
+        /**
+         * When the gateway runs on HTTPS but a candidate domain is HTTP, modern
+         * browsers will block the probe request for mixed-content reasons. When this
+         * flag is enabled, we will fall back to redirecting straight to the HTTP
+         * domain instead of marking it unreachable.
+         */
+        allowInsecureRedirects: true
+      };
+
+      const normalizeDomain = (domain) => {
+        if (!domain) return '';
+        const trimmed = domain.trim();
+        if (!trimmed) return '';
+        const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+        return withProtocol.replace(/\/+$/, '');
+      };
+
+      const appendCacheBust = (url) => {
+        const { cacheBustParam } = domainConfig;
+        if (!cacheBustParam) return url;
+        try {
+          const urlObj = new URL(url);
+          urlObj.searchParams.set(cacheBustParam, Date.now().toString(36));
+          return urlObj.toString();
+        } catch (error) {
+          console.warn('[Gateway] Unable to append cache bust parameter:', error);
+          return url;
+        }
+      };
+
+      const getTimestamp = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+
+      const fetchWithTimeout = (resource, options = {}) => {
+        const { timeoutMs } = domainConfig;
+        const controllerSupported = typeof AbortController === 'function';
+        const controller = controllerSupported ? new AbortController() : null;
+        const opts = { ...options };
+
+        if (controller) {
+          opts.signal = controller.signal;
+        }
+
+        return new Promise((resolve, reject) => {
+          const timeoutId = setTimeout(() => {
+            if (controller) {
+              controller.abort();
+            }
+            reject(new Error('timeout'));
+          }, domainConfig.timeoutMs);
+
+          fetch(resource, opts)
+            .then((response) => {
+              clearTimeout(timeoutId);
+              resolve(response);
+            })
+            .catch((error) => {
+              clearTimeout(timeoutId);
+              reject(error);
+            });
+        });
+      };
+
+      const probeWithImage = (url) => {
+        const { timeoutMs } = domainConfig;
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          let done = false;
+
+          const cleanup = () => {
+            clearTimeout(timerId);
+            img.onload = null;
+            img.onerror = null;
+            // Prevent memory leaks in some webviews.
+            img.src = 'data:,';
+          };
+
+          const timerId = setTimeout(() => {
+            if (done) return;
+            done = true;
+            cleanup();
+            reject(new Error('timeout'));
+          }, timeoutMs);
+
+          img.onload = () => {
+            if (done) return;
+            done = true;
+            cleanup();
+            resolve({ type: 'opaque', status: 200 });
+          };
+
+          img.onerror = () => {
+            if (done) return;
+            done = true;
+            cleanup();
+            reject(new Error('error'));
+          };
+
+          img.src = url;
+        });
+      };
+
+      const checkDomain = async (domain) => {
+        const normalizedDomain = normalizeDomain(domain);
+        if (!normalizedDomain) {
+          console.warn('[Gateway] Skipping empty domain entry.');
+          return null;
+        }
+
+        const {
+          healthCheckPath,
+          healthCheckOverrides,
+          allowInsecureRedirects,
+          treatClientErrorsAsSuccess
+        } = domainConfig;
+
+        const probePath = healthCheckOverrides[normalizedDomain] || healthCheckPath;
+        const probeUrl = appendCacheBust(normalizedDomain + probePath);
+        const start = getTimestamp();
+
+        if (
+          allowInsecureRedirects &&
+          window.location.protocol === 'https:' &&
+          normalizedDomain.startsWith('http:')
+        ) {
+          console.info('[Gateway] Skipping probe for insecure domain from HTTPS page. Redirecting directly.');
+          return { domain: normalizedDomain, insecureRedirect: true, duration: null };
+        }
+
+        const useFetch = typeof fetch === 'function';
+
+        try {
+          const response = useFetch
+            ? await fetchWithTimeout(probeUrl, {
+                method: 'GET',
+                cache: 'no-store',
+                mode: 'no-cors',
+                redirect: 'follow'
+              })
+            : await probeWithImage(probeUrl);
+
+          const duration = Math.round(getTimestamp() - start);
+
+          if (!response) {
+            return null;
+          }
+
+          const status = response.status || 0;
+          const type = response.type || 'opaque';
+          const isOpaque = type === 'opaque' || status === 0;
+          const isSuccessStatus = status >= 200 && status < 400;
+          const isToleratedClientError =
+            treatClientErrorsAsSuccess && status >= 400 && status < 500;
+
+          if (isOpaque || isSuccessStatus || isToleratedClientError) {
+            if (isToleratedClientError) {
+              console.info(
+                `[Gateway] ${normalizedDomain} responded with ${status} but client errors are treated as success.`
+              );
+            } else {
+              console.info(`[Gateway] ${normalizedDomain} responded in ~${duration}ms`);
+            }
+
+            return { domain: normalizedDomain, duration };
+          }
+
+          console.warn(`[Gateway] ${normalizedDomain} responded with status ${status}`);
+          return null;
+        } catch (error) {
+          if (
+            allowInsecureRedirects &&
+            window.location.protocol === 'https:' &&
+            normalizedDomain.startsWith('http:')
+          ) {
+            console.warn('[Gateway] Probe blocked by mixed-content policy. Redirecting anyway.');
+            return { domain: normalizedDomain, insecureRedirect: true, duration: null };
+          }
+
+          console.warn(`[Gateway] ${normalizedDomain} check failed:`, error);
+          return null;
+        }
+      };
+
+      const runGateway = async () => {
+        const { domainsToCheck } = domainConfig;
+
+        if (!domainsToCheck.length) {
+          setView({
+            icon: 'error',
+            title: 'No domains configured',
+            message: 'Please update the bouncer configuration with at least one service endpoint.',
+            details: ''
+          });
+          return;
+        }
+
+        if (isInAppBrowser()) {
+          setView({
+            icon: 'browser',
+            title: 'Please open this page in your browser',
+            message: 'We detected that this link is running inside an in-app browser (such as WeChat or Alipay).',
+            details:
+              '<div class="space-y-2 leading-relaxed"><p>Tap the menu in the corner of this app and choose <strong>“Open in Browser”</strong>.</p><p>Select Safari, Chrome, or your default browser to continue.</p></div>'
+          });
+          return;
+        }
+
+        setView({
+          icon: 'spinner',
+          title: 'Optimizing your connection...',
+          message: 'Finding the fastest server for you. This will only take a moment.',
+          details: progressHint
+        });
+
+        for (const domain of domainsToCheck) {
+          let hostname;
+          try {
+            hostname = new URL(domain).hostname;
+          } catch (_) {
+            hostname = domain;
+          }
+
+          setView({
+            icon: 'spinner',
+            title: 'Optimizing your connection...',
+            message: `Checking ${hostname}...`,
+            details: progressHint
+          });
+
+          const result = await checkDomain(domain);
+          if (result) {
+            const message = result.insecureRedirect
+              ? `Connecting through ${hostname}.`
+              : `Connecting through ${hostname} (≈${result.duration} ms).`;
+
+            setView({
+              icon: 'spinner',
+              title: 'Redirecting…',
+              message,
+              details: result.insecureRedirect
+                ? '<p>The probe was skipped because browsers block testing HTTP sites from HTTPS pages.</p>'
+                : ''
+            });
+
+            window.location.replace(result.domain);
+            return;
+          }
+        }
+
+        setView({
+          icon: 'error',
+          title: 'Unable to reach our services',
+          message: 'We are sorry, but our services seem to be unavailable from your location at the moment.',
+          details: '<p>Please try again later or contact our support team if the issue persists.</p>'
+        });
+      };
+
+      runGateway();
+    })();
+  </script>
 </body>
 </html>
