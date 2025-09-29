@@ -10,15 +10,14 @@ This project delivers a lightweight smart gateway page that detects in-app brows
 │   ├── css
 │   │   └── styles.css      # Custom styles (color scheme, global tweaks)
 │   └── js
-│       ├── domains.js      # Domain list, timeout, and health-check configuration
 │       └── gateway.js      # Core JavaScript controller for the bouncer
 ```
 
 ## Configuration
 
 1. Open `assets/js/domains.js`.
-2. Edit `domainsToCheck` with every domain or subdomain that hosts your primary service. Place the fastest or most reliable endpoints earlier in the list.
-3. Ensure each domain exposes the path referenced by `healthCheckPath` (defaults to `/`, meaning the homepage). Point this to a lightweight status file if you prefer. Use the `healthCheckOverrides` object when a domain needs a custom probe path.
+2. Edit `domainsToCheck` with every domain or subdomain that hosts your primary service. Place the fastest or most reliable endpoints earlier in the list. You can provide bare hostnames (e.g., `example.com`) or fully qualified URLs (e.g., `https://example.com`). Bare entries are automatically treated as HTTPS.
+3. Ensure each domain exposes the path referenced by `healthCheckPath` (defaults to `/`, meaning the homepage). Point this to a lightweight status file if you prefer. Use the `healthCheckOverrides` object when a domain needs a custom probe path (match the normalized URL, e.g., `https://example.com`).
 4. If your gateway runs on HTTPS but you need to redirect to HTTP-only services, leave `allowInsecureRedirects` enabled so the page can skip the browser-blocked probe and jump straight to the HTTP endpoint.
 5. Adjust `timeoutMs` if you want faster or slower fallbacks (value is in milliseconds), and tweak `cacheBustParam` if you want to disable cache busting.
 
@@ -57,5 +56,6 @@ aaPanel is a popular hosting control panel that can serve static sites easily.
 
 5. **Maintain the configuration**
    - When adding or removing service endpoints, update `assets/js/domains.js` and re-upload the file (or edit it directly from aaPanel’s file manager).
+
 
 With these steps, the gateway should be fully operational and easy to maintain through aaPanel.

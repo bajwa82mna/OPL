@@ -1,12 +1,15 @@
-export const domainConfig = {
+window.domainConfig = {
   /**
    * Update this list with every domain or subdomain that hosts the primary service.
    * Domains are checked in order and the first reachable entry wins.
+   *
+   * Schemes (https:// or http://) are optional in this list — the gateway will
+   * automatically assume HTTPS when one is not supplied.
    */
   domainsToCheck: [
-    'https://www.service-a.com',
-    'https://cdn.service-b.net',
-    'https://eu.service-c.com'
+    'https://www.google.com',
+    'https://www.apple.com',
+    'example.com'
   ],
 
   /**
@@ -31,6 +34,7 @@ export const domainConfig = {
 
   /**
    * Append a cache-busting query string to probes so CDNs do not cache 404s.
+   * Set to null to disable cache busting.
    */
   cacheBustParam: '_gateway_ping',
 

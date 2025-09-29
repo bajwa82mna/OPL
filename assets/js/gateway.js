@@ -1,5 +1,3 @@
-import { domainConfig } from './domains.js';
-
 const iconWrapper = document.getElementById('iconWrapper');
 const titleEl = document.getElementById('title');
 const messageEl = document.getElementById('message');
@@ -48,6 +46,26 @@ const isInAppBrowser = () => {
   return blockedIdentifiers.some((pattern) => pattern.test(ua));
 };
 
+const getDomainConfig = () => {
+  const fallback = {
+    domainsToCheck: [],
+    healthCheckPath: '/',
+    healthCheckOverrides: {},
+    timeoutMs: 4000,
+    cacheBustParam: null,
+    allowInsecureRedirects: false
+  };
+
+  if (!window.domainConfig) {
+    console.warn('[Gateway] No domain configuration found. Falling back to safe defaults.');
+    return fallback;
+  }
+
+  return { ...fallback, ...window.domainConfig };
+};
+
+const domainConfig = getDomainConfig();
+
 const fetchWithTimeout = (resource, options = {}) => {
   const { timeoutMs } = domainConfig;
   const opts = { ...options };
@@ -78,7 +96,19 @@ const fetchWithTimeout = (resource, options = {}) => {
   });
 };
 
-const normalizeDomain = (domain) => domain.replace(/\/+$/, '');
+const normalizeDomain = (domain) => {
+  if (!domain) {
+    return '';
+  }
+
+  const trimmed = domain.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  return withProtocol.replace(/\/+$/, '');
+};
 const getTimestamp = () =>
   typeof performance !== 'undefined' && typeof performance.now === 'function'
     ? performance.now()
@@ -103,6 +133,10 @@ const appendCacheBust = (url) => {
 
 const checkDomain = async (domain) => {
   const normalizedDomain = normalizeDomain(domain);
+  if (!normalizedDomain) {
+    console.warn('[Gateway] Skipping empty domain entry.');
+    return null;
+  }
   const { healthCheckPath, healthCheckOverrides, allowInsecureRedirects } = domainConfig;
   const probePath = healthCheckOverrides[normalizedDomain] || healthCheckPath;
   const probeUrl = appendCacheBust(normalizedDomain + probePath);
