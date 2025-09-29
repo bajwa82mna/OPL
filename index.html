@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Gateway</title>
+  <link rel="stylesheet" href="assets/css/styles.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex items-center justify-center px-6">
+  <main class="w-full max-w-lg">
+    <div class="rounded-3xl border border-slate-800/50 bg-slate-900/70 px-8 py-12 text-center shadow-2xl backdrop-blur">
+      <div id="iconWrapper" class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-sky-500/10 text-sky-400">
+        <span class="block h-12 w-12 animate-spin rounded-full border-[3px] border-current border-t-transparent"></span>
+      </div>
+      <h1 id="title" class="mt-8 text-3xl font-semibold tracking-tight">Optimizing your connection...</h1>
+      <p id="message" class="mt-4 text-base leading-relaxed text-slate-300" aria-live="polite">
+        Finding the fastest server for you. This will only take a moment.
+      </p>
+      <div id="details" class="mt-6 space-y-3 text-sm text-slate-400">
+        <p class="text-xs uppercase tracking-widest text-slate-500/80">Please keep this tab open while we optimize your connection.</p>
+      </div>
+    </div>
+  </main>
+
+  <script src="assets/js/domains.js"></script>
+  <script src="assets/js/gateway.js"></script>
+</body>
+</html>
