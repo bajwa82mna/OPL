@@ -10,7 +10,6 @@ This project delivers a lightweight smart gateway page that detects in-app brows
 │   ├── css
 │   │   └── styles.css      # Custom styles (color scheme, global tweaks)
 │   └── js
-│       ├── domains.js      # Domain list, timeout, and health-check configuration (exposed on window.domainConfig)
 │       └── gateway.js      # Core JavaScript controller for the bouncer
 ```
 
@@ -57,5 +56,6 @@ aaPanel is a popular hosting control panel that can serve static sites easily.
 
 5. **Maintain the configuration**
    - When adding or removing service endpoints, update `assets/js/domains.js` and re-upload the file (or edit it directly from aaPanel’s file manager).
+
 
 With these steps, the gateway should be fully operational and easy to maintain through aaPanel.
