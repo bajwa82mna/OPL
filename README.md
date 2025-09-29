@@ -18,8 +18,9 @@ This project delivers a lightweight smart gateway page that detects in-app brows
 
 1. Open `assets/js/domains.js`.
 2. Edit `domainsToCheck` with every domain or subdomain that hosts your primary service. Place the fastest or most reliable endpoints earlier in the list.
-3. Ensure each domain exposes the file referenced by `healthCheckPath` (defaults to `/health.txt`). Use the `healthCheckOverrides` object if a domain needs a custom path.
-4. Adjust `timeoutMs` if you want faster or slower fallbacks (value is in milliseconds).
+3. Ensure each domain exposes the path referenced by `healthCheckPath` (defaults to `/`, meaning the homepage). Point this to a lightweight status file if you prefer. Use the `healthCheckOverrides` object when a domain needs a custom probe path.
+4. If your gateway runs on HTTPS but you need to redirect to HTTP-only services, leave `allowInsecureRedirects` enabled so the page can skip the browser-blocked probe and jump straight to the HTTP endpoint.
+5. Adjust `timeoutMs` if you want faster or slower fallbacks (value is in milliseconds), and tweak `cacheBustParam` if you want to disable cache busting.
 
 ## Local Testing
 

@@ -84,18 +84,45 @@ const getTimestamp = () =>
     ? performance.now()
     : Date.now();
 
+const appendCacheBust = (url) => {
+  const { cacheBustParam } = domainConfig;
+
+  if (!cacheBustParam) {
+    return url;
+  }
+
+  try {
+    const urlObj = new URL(url);
+    urlObj.searchParams.set(cacheBustParam, Date.now().toString(36));
+    return urlObj.toString();
+  } catch (error) {
+    console.warn('[Gateway] Unable to append cache bust parameter:', error);
+    return url;
+  }
+};
+
 const checkDomain = async (domain) => {
   const normalizedDomain = normalizeDomain(domain);
-  const { healthCheckPath, healthCheckOverrides } = domainConfig;
+  const { healthCheckPath, healthCheckOverrides, allowInsecureRedirects } = domainConfig;
   const probePath = healthCheckOverrides[normalizedDomain] || healthCheckPath;
-  const probeUrl = normalizedDomain + probePath;
+  const probeUrl = appendCacheBust(normalizedDomain + probePath);
   const start = getTimestamp();
+
+  if (
+    allowInsecureRedirects &&
+    window.location.protocol === 'https:' &&
+    normalizedDomain.startsWith('http:')
+  ) {
+    console.info('[Gateway] Skipping probe for insecure domain from HTTPS page. Redirecting directly.');
+    return { domain: normalizedDomain, insecureRedirect: true, duration: null };
+  }
 
   try {
     const response = await fetchWithTimeout(probeUrl, {
       method: 'GET',
       cache: 'no-store',
-      mode: 'no-cors'
+      mode: 'no-cors',
+      redirect: 'follow'
     });
 
     const duration = Math.round(getTimestamp() - start);
@@ -112,6 +139,15 @@ const checkDomain = async (domain) => {
     console.warn(`[Gateway] ${normalizedDomain} responded with status ${response.status}`);
     return null;
   } catch (error) {
+    if (
+      allowInsecureRedirects &&
+      window.location.protocol === 'https:' &&
+      normalizedDomain.startsWith('http:')
+    ) {
+      console.warn('[Gateway] Probe blocked by mixed-content policy. Redirecting anyway.');
+      return { domain: normalizedDomain, insecureRedirect: true, duration: null };
+    }
+
     console.warn(`[Gateway] ${normalizedDomain} check failed:`, error);
     return null;
   }
@@ -165,11 +201,17 @@ const runGateway = async () => {
 
     const result = await checkDomain(domain);
     if (result) {
+      const message = result.insecureRedirect
+        ? `Connecting through ${hostname}.`
+        : `Connecting through ${hostname} (≈${result.duration} ms).`;
+
       setView({
         icon: 'spinner',
         title: 'Redirecting…',
-        message: `Connecting through ${hostname} (≈${result.duration} ms).`,
-        details: ''
+        message,
+        details: result.insecureRedirect
+          ? '<p>The probe was skipped because browsers block testing HTTP sites from HTTPS pages.</p>'
+          : ''
       });
 
       window.location.replace(result.domain);
